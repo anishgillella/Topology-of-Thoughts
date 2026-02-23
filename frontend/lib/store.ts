@@ -61,14 +61,16 @@ interface GraphStore {
   setSessions: (sessions: Session[]) => void;
   setCurrentSessionId: (id: string | null) => void;
 
+  // Session transcript
+  transcript: string;
+  appendTranscript: (text: string) => void;
+  setTranscript: (text: string) => void;
+
   // UI state
   loading: boolean;
   setLoading: (loading: boolean) => void;
   selectedNodeId: string | null;
   setSelectedNodeId: (id: string | null) => void;
-  similarityThreshold: number;
-  setSimilarityThreshold: (threshold: number) => void;
-
   // Live transcription
   isListening: boolean;
   setIsListening: (listening: boolean) => void;
@@ -94,9 +96,9 @@ export const useGraphStore = create<GraphStore>((set) => ({
   tdaResult: null,
   sessions: [],
   currentSessionId: null,
+  transcript: "",
   loading: false,
   selectedNodeId: null,
-  similarityThreshold: 0.5,
   isListening: false,
   liveTranscript: "",
   isProcessingVoice: false,
@@ -106,9 +108,13 @@ export const useGraphStore = create<GraphStore>((set) => ({
   setTDAResult: (result) => set({ tdaResult: result }),
   setSessions: (sessions) => set({ sessions }),
   setCurrentSessionId: (id) => set({ currentSessionId: id }),
+  appendTranscript: (text) =>
+    set((state) => ({
+      transcript: state.transcript ? state.transcript + "\n" + text : text,
+    })),
+  setTranscript: (transcript) => set({ transcript }),
   setLoading: (loading) => set({ loading }),
   setSelectedNodeId: (id) => set({ selectedNodeId: id }),
-  setSimilarityThreshold: (threshold) => set({ similarityThreshold: threshold }),
   setIsListening: (isListening) => set({ isListening }),
   setLiveTranscript: (liveTranscript) => set({ liveTranscript }),
   setIsProcessingVoice: (isProcessingVoice) => set({ isProcessingVoice }),
@@ -150,5 +156,6 @@ export const useGraphStore = create<GraphStore>((set) => ({
       ghostNodes: [],
       tdaResult: null,
       selectedNodeId: null,
+      transcript: "",
     }),
 }));

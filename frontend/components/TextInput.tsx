@@ -8,41 +8,7 @@ export default function TextInput() {
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const addNode = useGraphStore((s) => s.addNode);
-  const addEdge = useGraphStore((s) => s.addEdge);
-  const nodes = useGraphStore((s) => s.nodes);
-
-  const fallbackParse = (input: string) => {
-    const connectsMatch = input.match(/^(.+?)\s+connects to\s+(.+)$/i);
-    if (connectsMatch) {
-      const [, sourceLabel, targetLabel] = connectsMatch;
-      const srcLabel = sourceLabel.trim();
-      const tgtLabel = targetLabel.trim();
-
-      let srcNode = nodes.find(
-        (n) => n.label.toLowerCase() === srcLabel.toLowerCase()
-      );
-      if (!srcNode) {
-        srcNode = { id: crypto.randomUUID(), label: srcLabel };
-        addNode(srcNode);
-      }
-
-      let tgtNode = nodes.find(
-        (n) => n.label.toLowerCase() === tgtLabel.toLowerCase()
-      );
-      if (!tgtNode) {
-        tgtNode = { id: crypto.randomUUID(), label: tgtLabel };
-        addNode(tgtNode);
-      }
-
-      addEdge({
-        id: crypto.randomUUID(),
-        source: srcNode.id,
-        target: tgtNode.id,
-      });
-    } else {
-      addNode({ id: crypto.randomUUID(), label: input });
-    }
-  };
+  const appendTranscript = useGraphStore((s) => s.appendTranscript);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,11 +17,13 @@ export default function TextInput() {
 
     setText("");
     setLoading(true);
+    appendTranscript(trimmed);
 
     try {
       await processInputWithMemory(trimmed);
     } catch {
-      fallbackParse(trimmed);
+      // LLM pipeline failed — add raw text as a single node
+      addNode({ id: crypto.randomUUID(), label: trimmed });
     } finally {
       setLoading(false);
     }
@@ -74,7 +42,7 @@ export default function TextInput() {
       <button
         type="submit"
         disabled={loading || !text.trim()}
-        className="px-5 py-2.5 bg-violet-600 text-white rounded-xl hover:bg-violet-500 transition-all font-medium disabled:opacity-30 disabled:hover:bg-violet-600 text-sm"
+        className="px-5 py-2.5 bg-violet-600 text-white rounded-xl hover:bg-violet-500 transition-all font-medium disabled:opacity-30 disabled:hover:bg-violet-600 text-sm cursor-pointer"
       >
         {loading ? (
           <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">

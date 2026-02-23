@@ -15,18 +15,21 @@ export default function VoiceInput() {
   const setGhostNodes = useGraphStore((s) => s.setGhostNodes);
   const clearGhostNodes = useGraphStore((s) => s.clearGhostNodes);
 
+  const appendTranscript = useGraphStore((s) => s.appendTranscript);
+
   const processTranscript = useCallback(
     (text: string) => {
       if (!text.trim()) return;
       setIsProcessingVoice(true);
       clearGhostNodes();
+      appendTranscript(text);
 
       // Process in background — don't await, so mic toggle isn't blocked
       processInputWithMemory(text)
         .catch(() => {})
         .finally(() => setIsProcessingVoice(false));
     },
-    [clearGhostNodes, setIsProcessingVoice]
+    [clearGhostNodes, setIsProcessingVoice, appendTranscript]
   );
 
   const toggleListening = useCallback(async () => {

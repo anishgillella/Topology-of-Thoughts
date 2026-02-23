@@ -7,14 +7,12 @@ const EMBED_DIM = 256; // Matryoshka truncation (768 → 256)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let pipeline: any = null;
-let loading = false;
 let loadPromise: Promise<void> | null = null;
 
 async function loadModel(): Promise<void> {
   if (pipeline) return;
   if (loadPromise) return loadPromise;
 
-  loading = true;
   loadPromise = (async () => {
     const { pipeline: createPipeline } = await import(
       "@huggingface/transformers"
@@ -22,14 +20,12 @@ async function loadModel(): Promise<void> {
     pipeline = await createPipeline("feature-extraction", MODEL_ID, {
       dtype: "q4",
     });
-    loading = false;
   })();
   return loadPromise;
 }
 
 function truncateAndNormalize(embedding: number[], dim: number): number[] {
   const truncated = embedding.slice(0, dim);
-  // L2 normalize after truncation
   let norm = 0;
   for (let i = 0; i < truncated.length; i++) {
     norm += truncated[i] * truncated[i];
@@ -79,42 +75,4 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   }
   const denom = Math.sqrt(normA) * Math.sqrt(normB);
   return denom === 0 ? 0 : dot / denom;
-}
-
-export function findSimilarPairs(
-  nodes: Array<{ id: string; label: string; embedding?: number[] }>,
-  threshold: number
-): Array<{ source: string; target: string; similarity: number }> {
-  const pairs: Array<{
-    source: string;
-    target: string;
-    similarity: number;
-  }> = [];
-
-  for (let i = 0; i < nodes.length; i++) {
-    for (let j = i + 1; j < nodes.length; j++) {
-      const a = nodes[i].embedding;
-      const b = nodes[j].embedding;
-      if (!a || !b) continue;
-
-      const sim = cosineSimilarity(a, b);
-      if (sim >= threshold) {
-        pairs.push({
-          source: nodes[i].id,
-          target: nodes[j].id,
-          similarity: sim,
-        });
-      }
-    }
-  }
-
-  return pairs.sort((a, b) => b.similarity - a.similarity);
-}
-
-export function isModelLoaded(): boolean {
-  return pipeline !== null;
-}
-
-export function isModelLoading(): boolean {
-  return loading;
 }
