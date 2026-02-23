@@ -19,31 +19,7 @@ class GraphData(BaseModel):
     edges: list[Edge] = []
 
 
-# --- Extraction ---
-
-class ExtractionRequest(BaseModel):
-    text: str
-    existing_nodes: list[str] = []
-
-
-class ExtractedNode(BaseModel):
-    label: str
-    description: str | None = None
-    existing: bool = False
-
-
-class ExtractedEdge(BaseModel):
-    source: str
-    target: str
-    label: str | None = None
-
-
-class ExtractionResponse(BaseModel):
-    nodes: list[ExtractedNode] = []
-    edges: list[ExtractedEdge] = []
-
-
-# --- Reasoning ---
+# --- Unified Processing (extract + reason in one call) ---
 
 class NodeInfo(BaseModel):
     label: str
@@ -73,12 +49,25 @@ class HistoricalEdge(BaseModel):
     session_name: str | None = None
 
 
-class ReasoningRequest(BaseModel):
+class ProcessRequest(BaseModel):
     text: str
-    nodes: list[NodeInfo] = []
-    edges: list[EdgeInfo] = []
+    existing_nodes: list[str] = []
+    current_nodes: list[NodeInfo] = []
+    current_edges: list[EdgeInfo] = []
     historical_nodes: list[HistoricalNode] = []
     historical_edges: list[HistoricalEdge] = []
+
+
+class ExtractedNode(BaseModel):
+    label: str
+    description: str | None = None
+    existing: bool = False
+
+
+class ExtractedEdge(BaseModel):
+    source: str
+    target: str
+    label: str | None = None
 
 
 class SuggestedEdge(BaseModel):
@@ -92,9 +81,12 @@ class SuggestedNode(BaseModel):
     label: str
     description: str | None = None
     connects_to: list[str] = []
+    edge_labels: list[str] = []
 
 
-class ReasoningResponse(BaseModel):
+class ProcessResponse(BaseModel):
+    extracted_nodes: list[ExtractedNode] = []
+    extracted_edges: list[ExtractedEdge] = []
     suggested_edges: list[SuggestedEdge] = []
     suggested_nodes: list[SuggestedNode] = []
     insights: list[str] = []

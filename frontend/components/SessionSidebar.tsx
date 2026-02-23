@@ -13,6 +13,8 @@ export default function SessionSidebar() {
   const reset = useGraphStore((s) => s.reset);
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
+  const transcript = useGraphStore((s) => s.transcript);
+  const setTranscript = useGraphStore((s) => s.setTranscript);
 
   const fetchSessions = useCallback(async () => {
     try {
@@ -54,7 +56,7 @@ export default function SessionSidebar() {
       await fetch(`/api/sessions/${currentSessionId}/graph`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nodes, edges }),
+        body: JSON.stringify({ nodes, edges, transcript }),
       }).catch(() => {});
     }
 
@@ -63,6 +65,7 @@ export default function SessionSidebar() {
       if (res.ok) {
         const data = await res.json();
         setGraph(data.nodes || [], data.edges || []);
+        setTranscript(data.transcript || "");
         setCurrentSessionId(sessionId);
       }
     } catch {

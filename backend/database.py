@@ -76,6 +76,11 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_tda_session ON tda_snapshots(session_id);
             CREATE INDEX IF NOT EXISTS idx_nodes_label ON nodes(label);
         """)
+        # Migration: add transcript column if missing
+        try:
+            conn.execute("ALTER TABLE sessions ADD COLUMN transcript TEXT DEFAULT ''")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
 
 def create_session(session_id: str, name: str) -> dict:
@@ -109,7 +114,7 @@ def delete_session(session_id: str):
         conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
 
 
-def save_graph(session_id: str, nodes: list[dict], edges: list[dict]):
+def save_graph(session_id: str, nodes: list[dict], edges: list[dict], transcript: str | None = None):
     now = datetime.now(timezone.utc).isoformat()
     with get_connection() as conn:
         conn.execute("DELETE FROM nodes WHERE session_id = ?", (session_id,))
@@ -153,9 +158,15 @@ def save_graph(session_id: str, nodes: list[dict], edges: list[dict]):
                 ),
             )
 
-        conn.execute(
-            "UPDATE sessions SET updated_at = ? WHERE id = ?", (now, session_id)
-        )
+        if transcript is not None:
+            conn.execute(
+                "UPDATE sessions SET updated_at = ?, transcript = ? WHERE id = ?",
+                (now, transcript, session_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE sessions SET updated_at = ? WHERE id = ?", (now, session_id)
+            )
 
 
 def load_graph(session_id: str) -> dict:
@@ -166,6 +177,9 @@ def load_graph(session_id: str) -> dict:
         edge_rows = conn.execute(
             "SELECT * FROM edges WHERE session_id = ?", (session_id,)
         ).fetchall()
+        session_row = conn.execute(
+            "SELECT transcript FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone()
 
     nodes = []
     for r in node_rows:
@@ -198,7 +212,9 @@ def load_graph(session_id: str) -> dict:
         for r in edge_rows
     ]
 
-    return {"nodes": nodes, "edges": edges}
+    transcript = (session_row["transcript"] or "") if session_row else ""
+
+    return {"nodes": nodes, "edges": edges, "transcript": transcript}
 
 
 def get_all_nodes_with_embeddings(exclude_session_id: str | None = None) -> list[dict]:

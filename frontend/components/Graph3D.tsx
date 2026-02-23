@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useGraphStore } from "@/lib/store";
+import { useVisionStore } from "@/lib/visionStore";
+import { useGestureToGraph } from "@/lib/useGestureToGraph";
 
 const ForceGraph3D = dynamic(
   () => import("react-force-graph-3d").then((mod) => mod.default),
@@ -92,7 +94,7 @@ function createLabeledSphere(
   ctx.font = font;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = isGhost ? "rgba(103, 232, 249, 0.6)" : "#ffffff";
+  ctx.fillStyle = isGhost ? "rgba(147, 197, 253, 0.6)" : "#e4e4e7";
   ctx.fillText(label, canvas.width / 2, canvas.height / 2);
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -121,9 +123,26 @@ export default function Graph3D() {
   const ghostNodes = useGraphStore((s) => s.ghostNodes);
   const selectedNodeId = useGraphStore((s) => s.selectedNodeId);
   const setSelectedNodeId = useGraphStore((s) => s.setSelectedNodeId);
+  const cameraEnabled = useVisionStore((s) => s.cameraEnabled);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fgRef = useRef<any>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+
+  // Gesture-to-graph camera control
+  useGestureToGraph(fgRef);
+
+  // Set transparent background when camera is on
+  useEffect(() => {
+    if (!fgRef.current) return;
+    const renderer = fgRef.current.renderer?.();
+    if (renderer) {
+      if (cameraEnabled) {
+        renderer.setClearColor(0x000000, 0);
+      } else {
+        renderer.setClearColor(0x09090b, 1);
+      }
+    }
+  }, [cameraEnabled]);
 
   useEffect(() => {
     const updateSize = () => {
@@ -216,16 +235,16 @@ export default function Graph3D() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nodeColor = useCallback((node: any) => {
-    if (node.ghost) return "rgba(103, 232, 249, 0.4)";
-    if (node.fromSession) return "#14b8a6";
-    if (!selectedNodeId) return "#8b5cf6";
-    if (node.id === selectedNodeId) return "#a78bfa";
+    if (node.ghost) return "rgba(147, 197, 253, 0.3)";
+    if (node.fromSession) return "#2dd4bf";
+    if (!selectedNodeId) return "#3b82f6";
+    if (node.id === selectedNodeId) return "#60a5fa";
     const isConnected = edges.some(
       (e) =>
         (e.source === selectedNodeId && e.target === node.id) ||
         (e.target === selectedNodeId && e.source === node.id)
     );
-    return isConnected ? "#7c3aed" : "#3f3f46";
+    return isConnected ? "#38bdf8" : "#27272a";
   }, [selectedNodeId, edges]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -247,17 +266,17 @@ export default function Graph3D() {
           Math.log2(node.mentionCount || 1) * 0.5;
       const radius = Math.cbrt(val) * 2.5;
 
-      let color = "#8b5cf6";
-      if (node.ghost) color = "rgba(103, 232, 249, 0.4)";
-      else if (node.fromSession) color = "#14b8a6";
-      else if (selectedNodeId && node.id === selectedNodeId) color = "#a78bfa";
+      let color = "#3b82f6";
+      if (node.ghost) color = "rgba(147, 197, 253, 0.3)";
+      else if (node.fromSession) color = "#2dd4bf";
+      else if (selectedNodeId && node.id === selectedNodeId) color = "#60a5fa";
       else if (selectedNodeId) {
         const isConnected = edges.some(
           (e) =>
             (e.source === selectedNodeId && e.target === node.id) ||
             (e.target === selectedNodeId && e.source === node.id)
         );
-        color = isConnected ? "#7c3aed" : "#3f3f46";
+        color = isConnected ? "#38bdf8" : "#27272a";
       }
 
       return createLabeledSphere(node.name, radius, color, !!node.ghost);
@@ -271,9 +290,9 @@ export default function Graph3D() {
     (link: any) => {
       if (!link.label || link.ghost) return new (require("three").Group)();
 
-      let color = "#9ca3af";
+      let color = "#a1a1aa";
       if (link.historical) color = "#5eead4";
-      else if (link.aiInferred) color = "#fcd34d";
+      else if (link.aiInferred) color = "#a5b4fc";
 
       return createTextSprite(link.label, color, 2);
     },
@@ -295,9 +314,9 @@ export default function Graph3D() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const linkColor = useCallback((link: any) => {
-    if (link.ghost) return "rgba(103, 232, 249, 0.2)";
-    if (link.historical) return "#14b8a6";
-    return link.aiInferred ? "#f59e0b" : "#4b5563";
+    if (link.ghost) return "rgba(147, 197, 253, 0.15)";
+    if (link.historical) return "#2dd4bf";
+    return link.aiInferred ? "#818cf8" : "#3f3f46";
   }, []);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -319,7 +338,7 @@ export default function Graph3D() {
           width={dimensions.width}
           height={dimensions.height}
           graphData={graphData}
-          backgroundColor="#09090b"
+          backgroundColor={cameraEnabled ? "rgba(0,0,0,0)" : "#09090b"}
           nodeLabel=""
           nodeColor={nodeColor}
           nodeVal={nodeVal}

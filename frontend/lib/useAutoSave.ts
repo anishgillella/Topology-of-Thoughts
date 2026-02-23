@@ -6,6 +6,7 @@ import { useGraphStore } from "./store";
 export function useAutoSave() {
   const nodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
+  const transcript = useGraphStore((s) => s.transcript);
   const currentSessionId = useGraphStore((s) => s.currentSessionId);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -19,7 +20,7 @@ export function useAutoSave() {
         await fetch(`/api/sessions/${currentSessionId}/graph`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nodes, edges }),
+          body: JSON.stringify({ nodes, edges, transcript }),
         });
       } catch {
         // Save failed — will retry on next change
@@ -29,5 +30,5 @@ export function useAutoSave() {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [nodes, edges, currentSessionId]);
+  }, [nodes, edges, transcript, currentSessionId]);
 }

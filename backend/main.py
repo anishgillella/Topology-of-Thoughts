@@ -1,18 +1,16 @@
-import json
-
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, WebSocket, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from models import (
-    ExtractionRequest, ExtractionResponse, ExtractedNode, ExtractedEdge,
-    ReasoningRequest, ReasoningResponse, SuggestedEdge, SuggestedNode,
+    ProcessRequest, ProcessResponse, ExtractedNode, ExtractedEdge,
+    SuggestedEdge, SuggestedNode,
     TDARequest, TDAResponse, PersistencePoint, Cycle,
     MemorySearchRequest, MemorySearchResponse, MemoryNode, MemoryEdge,
 )
-from llm import extract_concepts, reason_about_graph
+from llm import process_input
 from tda import compute_persistence
 from database import (
     create_session, list_sessions, delete_session,
@@ -36,64 +34,60 @@ async def health():
     return {"status": "ok"}
 
 
-@app.post("/api/extract", response_model=ExtractionResponse)
-async def extract(request: ExtractionRequest):
+@app.post("/api/process", response_model=ProcessResponse)
+async def process(request: ProcessRequest):
+    """Single endpoint: extracts concepts AND reasons about connections in one LLM call."""
     try:
-        result = await extract_concepts(request.text, request.existing_nodes)
-        nodes = [
-            ExtractedNode(
-                label=n.get("label", ""),
-                description=n.get("description"),
-                existing=n.get("existing", False),
-            )
-            for n in result.get("nodes", [])
-        ]
-        edges = [
-            ExtractedEdge(
-                source=e.get("source", ""),
-                target=e.get("target", ""),
-                label=e.get("label"),
-            )
-            for e in result.get("edges", [])
-        ]
-        return ExtractionResponse(nodes=nodes, edges=edges)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/reason", response_model=ReasoningResponse)
-async def reason(request: ReasoningRequest):
-    try:
-        nodes_dicts = [n.model_dump() for n in request.nodes]
-        edges_dicts = [e.model_dump() for e in request.edges]
+        current_nodes_dicts = [n.model_dump() for n in request.current_nodes]
+        current_edges_dicts = [e.model_dump() for e in request.current_edges]
         historical_nodes_dicts = [n.model_dump() for n in request.historical_nodes]
         historical_edges_dicts = [e.model_dump() for e in request.historical_edges]
-        result = await reason_about_graph(
-            request.text, nodes_dicts, edges_dicts,
-            historical_nodes_dicts, historical_edges_dicts,
+
+        result = await process_input(
+            text=request.text,
+            existing_nodes=request.existing_nodes,
+            current_nodes=current_nodes_dicts,
+            current_edges=current_edges_dicts,
+            historical_nodes=historical_nodes_dicts,
+            historical_edges=historical_edges_dicts,
         )
-        suggested_edges = [
-            SuggestedEdge(
-                source=e.get("source", ""),
-                target=e.get("target", ""),
-                label=e.get("label"),
-                reason=e.get("reason"),
-            )
-            for e in result.get("suggested_edges", [])
-        ]
-        suggested_nodes = [
-            SuggestedNode(
-                label=n.get("label", ""),
-                description=n.get("description"),
-                connects_to=n.get("connects_to", []),
-            )
-            for n in result.get("suggested_nodes", [])
-        ]
-        insights = result.get("insights", [])
-        return ReasoningResponse(
-            suggested_edges=suggested_edges,
-            suggested_nodes=suggested_nodes,
-            insights=insights,
+
+        return ProcessResponse(
+            extracted_nodes=[
+                ExtractedNode(
+                    label=n.get("label", ""),
+                    description=n.get("description"),
+                    existing=n.get("existing", False),
+                )
+                for n in result.get("extracted_nodes", [])
+            ],
+            extracted_edges=[
+                ExtractedEdge(
+                    source=e.get("source", ""),
+                    target=e.get("target", ""),
+                    label=e.get("label"),
+                )
+                for e in result.get("extracted_edges", [])
+            ],
+            suggested_edges=[
+                SuggestedEdge(
+                    source=e.get("source", ""),
+                    target=e.get("target", ""),
+                    label=e.get("label"),
+                    reason=e.get("reason"),
+                )
+                for e in result.get("suggested_edges", [])
+            ],
+            suggested_nodes=[
+                SuggestedNode(
+                    label=n.get("label", ""),
+                    description=n.get("description"),
+                    connects_to=n.get("connects_to", []),
+                    edge_labels=n.get("edge_labels", []),
+                )
+                for n in result.get("suggested_nodes", [])
+            ],
+            insights=result.get("insights", []),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -211,45 +205,6 @@ async def get_graph(session_id: str):
 async def set_graph(session_id: str, body: dict):
     nodes = body.get("nodes", [])
     edges = body.get("edges", [])
-    save_graph(session_id, nodes, edges)
+    transcript = body.get("transcript")
+    save_graph(session_id, nodes, edges, transcript=transcript)
     return {"status": "saved"}
-
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket for real-time TDA updates."""
-    await websocket.accept()
-    try:
-        while True:
-            data = await websocket.receive_text()
-            msg = json.loads(data)
-
-            if msg.get("type") == "tda":
-                embeddings = msg.get("embeddings", [])
-                node_ids = msg.get("node_ids", [])
-                result = compute_persistence(embeddings)
-
-                cycles = []
-                for c in result.get("cycles", []):
-                    cycle_node_ids = [
-                        node_ids[int(idx)]
-                        for idx in c.get("nodes", [])
-                        if int(idx) < len(node_ids)
-                    ]
-                    cycles.append({
-                        "dimension": c.get("dimension", 0),
-                        "nodes": cycle_node_ids,
-                    })
-
-                await websocket.send_text(json.dumps({
-                    "type": "tda_result",
-                    "betti_0": result.get("betti_0", 0),
-                    "betti_1": result.get("betti_1", 0),
-                    "betti_2": result.get("betti_2", 0),
-                    "persistence_diagram": result.get("persistence_diagram", []),
-                    "cycles": cycles,
-                }))
-            else:
-                await websocket.send_text(json.dumps({"type": "echo", "data": data}))
-    except Exception:
-        pass
